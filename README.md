@@ -11,7 +11,8 @@ interactive report generation, or PDF export.
 1. Create or sign in to a Streamlit Community Cloud account.
 2. Select this repository and the `main` branch.
 3. Set the main file to `baseball_dashboard.py`.
-4. Deploy. Dependencies are read from `requirements.txt`.
+4. Deploy. Python dependencies are read from `requirements.txt`, and Chromium's
+   Linux libraries are read from `packages.txt`.
 
 Install and launch from this folder:
 
