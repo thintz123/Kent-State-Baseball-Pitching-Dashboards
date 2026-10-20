@@ -1,0 +1,16 @@
+.venv/
+.venv-*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+
+# Local source data and generated reports
+*.xlsx
+*.xls
+*.csv
+tmp/
+
+# Local editor settings
+.vscode/
