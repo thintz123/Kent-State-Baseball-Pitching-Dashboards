@@ -37,10 +37,14 @@ def report_browser():
                     + (f" {detail}" if detail else "")
                 ) from exc
         try:
-            browser = playwright.chromium.launch()
+            browser = playwright.chromium.launch(
+                args=["--no-sandbox", "--disable-setuid-sandbox"],
+            )
         except Exception as exc:
+            detail = str(exc).strip()
             raise RuntimeError(
                 "Could not start the PDF browser after installing Chromium."
+                + (f" {detail}" if detail else "")
             ) from exc
         try:
             yield browser
