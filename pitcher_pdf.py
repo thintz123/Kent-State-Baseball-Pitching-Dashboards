@@ -2,7 +2,10 @@
 
 from contextlib import contextmanager
 from io import BytesIO
+import subprocess
+import sys
 import re
+from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
 from report_html import REPORT_WIDTH, build_report_html
@@ -18,11 +21,26 @@ def report_browser():
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
+        browser_path = playwright.chromium.executable_path
+        if not browser_path or not Path(browser_path).exists():
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "playwright", "install", "chromium"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as exc:
+                detail = (exc.stderr or exc.stdout or "").strip()
+                raise RuntimeError(
+                    "Could not install the PDF browser on the server."
+                    + (f" {detail}" if detail else "")
+                ) from exc
         try:
             browser = playwright.chromium.launch()
         except Exception as exc:
             raise RuntimeError(
-                "Could not start the PDF browser. Run: python -m playwright install chromium"
+                "Could not start the PDF browser after installing Chromium."
             ) from exc
         try:
             yield browser

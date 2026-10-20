@@ -17,7 +17,6 @@ Install and launch from this folder:
 
 ```sh
 python -m pip install -r requirements.txt
-python -m playwright install chromium
 python -m streamlit run baseball_dashboard.py
 ```
 
@@ -42,7 +41,10 @@ The preview scales the report to the available width and scrolls vertically.
 PDFs preserve the full layout on a single continuous page rather than splitting
 charts across letter-sized pages. Hover and zoom remain available in the website;
 the PDF is static. Plotly is bundled locally, so exports do not require a CDN.
-Chromium must be installed once in each environment that runs the app.
+Playwright's Chromium browser is installed automatically by the server the first
+time a PDF is generated. Users do not need to install Chromium. For local
+development, run `python -m playwright install chromium` once if you want to
+avoid downloading it on the first local PDF export.
 
 Run regression checks:
 
