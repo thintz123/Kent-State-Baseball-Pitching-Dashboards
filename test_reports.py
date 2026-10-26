@@ -81,8 +81,14 @@ class ReportTests(unittest.TestCase):
             r'<script type="application/json" id="plot-specs">(.*?)</script>', html, re.S,
         ).group(1))
         kinds = {trace["type"] for spec in specs for trace in spec["figure"]["data"]}
-        self.assertTrue({"histogram2dcontour", "violin", "scatterpolar", "heatmap"} <= kinds)
-        self.assertIn("Tilt Consistency", html)
+        barpolar_plots = [
+            spec for spec in specs
+            if any(trace["type"] == "barpolar" for trace in spec["figure"]["data"])
+        ]
+        self.assertTrue({"histogram2dcontour", "violin", "barpolar", "heatmap"} <= kinds)
+        self.assertEqual(len(barpolar_plots), 2)
+        self.assertIn("Tilt direction by pitch type", html)
+        self.assertIn("Observed movement direction by pitch type", html)
         self.assertIn("&lt;test.csv&gt;", html)
         self.assertNotIn("</script><script>alert(1)</script>", html)
 

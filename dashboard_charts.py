@@ -10,6 +10,7 @@ from dashboard_config import (
     PITCH_COLORS, PITCH_HEATMAPS, STRIKE_ZONE_X_MIN, STRIKE_ZONE_X_MAX,
     STRIKE_ZONE_Y_MIN, STRIKE_ZONE_Y_MAX,
 )
+from dashboard_stats import tilt_to_minutes
 
 
 def render_plate_location(data: pd.DataFrame, ui=st) -> None:
@@ -164,19 +165,9 @@ def render_pitch_movement(data: pd.DataFrame, ui=st) -> None:
 
 
 
-def build_movement_clock(data: pd.DataFrame) -> go.Figure:
-    """Bin movement vectors into 30-minute clock sectors, using export signs."""
-    columns = ["HorzBreak", "InducedVertBreak"]
-    movement = data[columns].apply(pd.to_numeric, errors="coerce")
-    valid = np.isfinite(movement).all(axis=1) & movement.ne(0).any(axis=1)
-    plot_data = data.loc[valid, ["MappedPitchType"]].copy()
-    # Zero degrees is up (12); positive horizontal break points right (3).
-    plot_data["Direction"] = (
-        np.degrees(np.arctan2(
-            movement.loc[valid, "HorzBreak"],
-            movement.loc[valid, "InducedVertBreak"],
-        )) % 360
-    )
+def _build_clock_figure(plot_data: pd.DataFrame, hover_label: str) -> go.Figure:
+    """Build a 30-minute sector polar bar clock from pitch directions in degrees."""
+    plot_data = plot_data.copy()
     plot_data["Sector"] = (
         np.floor((plot_data["Direction"] + 7.5) / 15).astype(int) % 24
     )
@@ -200,13 +191,12 @@ def build_movement_clock(data: pd.DataFrame) -> go.Figure:
             ),
             customdata=clock_labels,
             hovertemplate=(
-                "%{fullData.name}<br>Movement direction: %{customdata}"
+                f"%{{fullData.name}}<br>{hover_label}: %{{customdata}}"
                 "<br>Pitches: %{r}<extra></extra>"
             ),
         ))
     fig.update_layout(
-        height=300,
-        width=640,
+        height=320,
         barmode="stack",
         paper_bgcolor="white",
         margin=dict(l=40, r=40, t=35, b=40),
@@ -228,6 +218,56 @@ def build_movement_clock(data: pd.DataFrame) -> go.Figure:
         ),
     )
     return fig
+
+
+
+def build_tilt_clock(data: pd.DataFrame) -> go.Figure:
+    """Bin spin-based tilt into 30-minute clock sectors."""
+    direction = pd.Series(np.nan, index=data.index, dtype=float)
+    if "SpinAxis" in data:
+        spin_axis = pd.to_numeric(data["SpinAxis"], errors="coerce")
+        direction = (spin_axis + 180) % 360
+    if "Tilt" in data:
+        minutes = data["Tilt"].map(tilt_to_minutes)
+        tilt_direction = (minutes / (12 * 60)) * 360 % 360
+        direction = direction.where(direction.notna(), tilt_direction)
+    valid = np.isfinite(direction)
+    plot_data = data.loc[valid, ["MappedPitchType"]].copy()
+    plot_data["Direction"] = direction.loc[valid].to_numpy(dtype=float)
+    return _build_clock_figure(plot_data, "Tilt direction")
+
+
+
+def render_tilt_clock(data: pd.DataFrame, ui=st) -> None:
+    ui.subheader("Tilt direction by pitch type")
+    fig = build_tilt_clock(data)
+    if not fig.data:
+        ui.info("No tilt or spin-axis measurements are available for these filters.")
+        return
+    ui.plotly_chart(fig, use_container_width=True)
+    ui.caption(
+        "Direction shows spin-based movement (tilt) from pitcher POV on a 12-hour "
+        "clock: 12 is pure backspin; 6 is pure topspin; 3 and 9 are sidespin. "
+        "Each sector spans 30 clock minutes; bar length shows pitch count. "
+        "Missing or invalid tilt measurements are excluded."
+    )
+
+
+
+def build_movement_clock(data: pd.DataFrame) -> go.Figure:
+    """Bin movement vectors into 30-minute clock sectors, using export signs."""
+    columns = ["HorzBreak", "InducedVertBreak"]
+    movement = data[columns].apply(pd.to_numeric, errors="coerce")
+    valid = np.isfinite(movement).all(axis=1) & movement.ne(0).any(axis=1)
+    plot_data = data.loc[valid, ["MappedPitchType"]].copy()
+    # Zero degrees is up (12); positive horizontal break points right (3).
+    plot_data["Direction"] = (
+        np.degrees(np.arctan2(
+            movement.loc[valid, "HorzBreak"],
+            movement.loc[valid, "InducedVertBreak"],
+        )) % 360
+    )
+    return _build_clock_figure(plot_data, "Movement direction")
 
 
 
