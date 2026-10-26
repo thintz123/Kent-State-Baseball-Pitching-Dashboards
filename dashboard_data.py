@@ -48,11 +48,11 @@ def normalize_data(data: pd.DataFrame) -> pd.DataFrame:
     for column, default in {
         "TaggedPitchType": "Other", "AutoPitchType": None,
         "PitchCall": "Unknown", "KorBB": "Undefined", "PitcherTeam": "Unknown",
-        "BatterSide": "Unknown", "Tilt": None,
+        "BatterSide": "Unknown", "PitcherThrows": "Unknown", "Tilt": None,
     }.items():
         if column not in data:
             data[column] = default
-    for column in ["Pitcher", "PitcherTeam", "BatterSide", "TaggedPitchType", "AutoPitchType"]:
+    for column in ["Pitcher", "PitcherTeam", "BatterSide", "PitcherThrows", "TaggedPitchType", "AutoPitchType"]:
         data[column] = data[column].astype("string").str.strip().replace("", pd.NA)
     data["PitchNo"] = np.arange(1, len(data) + 1)
     numeric_columns = [
@@ -87,6 +87,7 @@ def normalize_data(data: pd.DataFrame) -> pd.DataFrame:
     data["Pitcher"] = data["Pitcher"].fillna("Unknown")
     data["PitcherTeam"] = data["PitcherTeam"].fillna("Unknown")
     data["BatterSide"] = data["BatterSide"].fillna("Unknown")
+    data["PitcherThrows"] = data["PitcherThrows"].fillna("Unknown")
     data["IsStrike"] = data["PitchCall"].isin(
         ["StrikeCalled", "StrikeSwinging", "FoulBallNotFieldable", "InPlay"]
     )

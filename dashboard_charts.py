@@ -468,6 +468,252 @@ def render_sequence_chart(data: pd.DataFrame, ui=st) -> None:
 
 
 
+def _svg_path(points: list[tuple[float, float | str]], sign: float = 1.0) -> str:
+    """Build an SVG path string while mirroring x-coordinates by sign."""
+    tokens = []
+    for item in points:
+        cmd = item[0]
+        coords = item[1:]
+        scaled = [
+            f"{val * sign if idx % 2 == 0 else val:.3f}"
+            for idx, val in enumerate(coords)
+        ]
+        tokens.append(f"{cmd} {' '.join(scaled)}")
+    return " ".join(tokens) + " Z"
+
+
+
+def build_arm_slot_chart(data: pd.DataFrame) -> go.Figure:
+    """Render a pitcher silhouette and mound with arm-slot cones to mean release points."""
+    release_data = data.dropna(subset=["RelSide", "RelHeight"])
+    fig = go.Figure()
+    if release_data.empty:
+        return fig
+
+    throws = (
+        release_data["PitcherThrows"].dropna().astype(str).str.upper().tolist()
+        if "PitcherThrows" in release_data
+        else []
+    )
+    if any(val.startswith("L") for val in throws) and not any(val.startswith("R") for val in throws):
+        sign = -1.0
+    elif any(val.startswith("R") for val in throws):
+        sign = 1.0
+    else:
+        sign = -1.0 if release_data["RelSide"].mean() < 0 else 1.0
+
+    # Silhouette body, shading, and belt in feet (RHP default; mirrored by sign for LHP)
+    body_path = _svg_path([
+        ("M", 0.20, 1.12),
+        ("L", 0.14, 1.82),
+        ("Q", 0.02, 2.48, -0.18, 3.08),
+        ("L", -0.28, 3.18),
+        ("Q", -0.60, 2.86, -0.74, 3.18),
+        ("Q", -0.84, 3.62, -0.64, 4.18),
+        ("Q", -0.50, 4.44, -0.34, 4.48),
+        ("Q", -0.56, 4.54, -0.66, 4.82),
+        ("Q", -0.74, 5.14, -0.44, 5.24),
+        ("Q", -0.16, 5.26, -0.10, 4.90),
+        ("Q", -0.06, 4.70, -0.08, 4.60),
+        ("Q", 0.22, 4.64, 0.46, 4.50),
+        ("Q", 0.64, 4.38, 0.60, 4.08),
+        ("Q", 0.68, 3.64, 0.78, 3.18),
+        ("Q", 0.90, 2.70, 0.88, 2.22),
+        ("Q", 0.94, 1.82, 0.90, 1.62),
+        ("Q", 0.74, 1.30, 0.52, 1.12),
+    ], sign)
+
+    shade_upper = _svg_path([
+        ("M", -0.28, 3.18),
+        ("Q", -0.60, 2.86, -0.74, 3.18),
+        ("Q", -0.84, 3.62, -0.64, 4.18),
+        ("Q", -0.46, 4.38, -0.16, 4.34),
+        ("Q", -0.06, 3.88, -0.24, 3.48),
+    ], sign)
+
+    shade_lower = _svg_path([
+        ("M", 0.20, 1.12),
+        ("L", 0.14, 1.82),
+        ("Q", 0.04, 2.38, -0.12, 2.95),
+        ("Q", 0.32, 2.90, 0.60, 2.68),
+        ("Q", 0.56, 2.08, 0.52, 1.12),
+    ], sign)
+
+    belt_path = _svg_path([
+        ("M", -0.18, 3.08),
+        ("Q", 0.30, 3.20, 0.78, 3.14),
+        ("L", 0.76, 3.26),
+        ("Q", 0.30, 3.32, -0.20, 3.20),
+    ], sign)
+
+    shapes = [
+        # Silhouette base & two-tone shading
+        dict(
+            type="path", path=body_path,
+            fillcolor="#d4e3e3", line=dict(color="#7a9090", width=1.8),
+            layer="below",
+        ),
+        dict(
+            type="path", path=shade_upper,
+            fillcolor="#bfd2d2", line=dict(width=0),
+            layer="below",
+        ),
+        dict(
+            type="path", path=shade_lower,
+            fillcolor="#bfd2d2", line=dict(width=0),
+            layer="below",
+        ),
+        dict(
+            type="path", path=belt_path,
+            fillcolor="#d4e3e3", line=dict(color="#8aa0a0", width=1.3),
+            layer="below",
+        ),
+        # Leg separation contour
+        dict(
+            type="path",
+            path=f"M {0.36 * sign:.3f} 2.48 L {0.38 * sign:.3f} 1.80 Q {0.50 * sign:.3f} 1.55 {0.42 * sign:.3f} 1.14",
+            line=dict(color="#7a9090", width=1.5),
+            layer="below",
+        ),
+    ]
+
+    sx, sy = 0.36 * sign, 4.42
+    pitch_Order = list(release_data["MappedPitchType"].dropna().unique())
+    pitch_points = []
+
+    for pitch_type in pitch_Order:
+        pitch_data = release_data[release_data["MappedPitchType"].eq(pitch_type)]
+        rx = float(pitch_data["RelSide"].mean())
+        ry = float(pitch_data["RelHeight"].mean())
+        dx, dy = rx - sx, ry - sy
+        dist = float(np.hypot(dx, dy))
+        if dist > 1e-3:
+            ux, uy = dx / dist, dy / dist
+            nx, ny = -uy, ux
+            w0, w1 = 0.11, 0.14
+            p1x, p1y = sx + nx * w0, sy + ny * w0
+            p2x, p2y = rx + nx * w1, ry + ny * w1
+            p3x, p3y = rx - nx * w1, ry - ny * w1
+            p4x, p4y = sx - nx * w0, sy - ny * w0
+            cone_path = (
+                f"M {p1x:.3f} {p1y:.3f} L {p2x:.3f} {p2y:.3f} "
+                f"L {p3x:.3f} {p3y:.3f} L {p4x:.3f} {p4y:.3f} Z"
+            )
+            shapes.append(dict(
+                type="path", path=cone_path,
+                fillcolor="rgba(205, 224, 224, 0.78)",
+                line=dict(color="#6b8282", width=1.8),
+                layer="below",
+            ))
+        slot_deg = float(np.degrees(np.arctan2(ry - sy, abs(rx - sx))))
+        pitch_points.append((pitch_type, rx, ry, slot_deg, len(pitch_data)))
+
+    # Shoulder pivot circle on top of cone bases
+    r_sh = 0.12
+    shapes.append(dict(
+        type="circle",
+        x0=sx - r_sh, x1=sx + r_sh, y0=sy - r_sh, y1=sy + r_sh,
+        fillcolor="#d4e3e3", line=dict(color="#6b8282", width=2),
+        layer="below",
+    ))
+
+    # Grass, mound, and pitching rubber at the bottom
+    shapes.extend([
+        dict(
+            type="rect", x0=-3.4, x1=3.4, y0=0.0, y1=0.38,
+            fillcolor="#507c48", line=dict(color="#3d6136", width=1),
+            layer="below",
+        ),
+        dict(
+            type="rect", x0=-1.15, x1=1.15, y0=0.0, y1=0.38,
+            fillcolor="#476f40", line=dict(width=0),
+            layer="below",
+        ),
+        dict(
+            type="rect", x0=-3.4, x1=3.4, y0=0.38, y1=0.55,
+            fillcolor="#75371d", line=dict(width=0),
+            layer="below",
+        ),
+        dict(
+            type="path",
+            path="M -3.4 0.55 L -3.4 0.92 Q 0 1.12 3.4 0.92 L 3.4 0.55 Z",
+            fillcolor="#8a4224", line=dict(width=0),
+            layer="below",
+        ),
+        dict(
+            type="path",
+            path="M -3.4 0.92 Q 0 1.12 3.4 0.92",
+            line=dict(color="#2b1d16", width=3),
+            layer="below",
+        ),
+        dict(
+            type="path",
+            path="M -0.60 0.99 L 0.60 0.99 L 0.56 1.12 L -0.56 1.12 Z",
+            fillcolor="#f5f5f5", line=dict(color="#666666", width=1.5),
+            layer="below",
+        ),
+    ])
+
+    for pitch_type, rx, ry, slot_deg, count in pitch_points:
+        fig.add_trace(
+            go.Scatter(
+                x=[rx],
+                y=[ry],
+                mode="markers",
+                name=pitch_type,
+                marker=dict(
+                    color=PITCH_COLORS.get(pitch_type, "gray"),
+                    size=15,
+                    line=dict(color="#2b2b2b", width=2),
+                ),
+                customdata=[[slot_deg, count]],
+                hovertemplate=(
+                    "%{fullData.name}<br>"
+                    "Avg release side: %{x:.2f} ft<br>"
+                    "Avg release height: %{y:.2f} ft<br>"
+                    "Arm slot: %{customdata[0]:.1f}°<br>"
+                    "Pitches: %{customdata[1]}"
+                    "<extra></extra>"
+                ),
+            )
+        )
+
+    max_ry = max((pt[2] for pt in pitch_points), default=6.2)
+    fig.update_layout(
+        height=300,
+        margin=dict(l=10, r=10, t=10, b=35),
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        shapes=shapes,
+        showlegend=True,
+        legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.12),
+    )
+    fig.update_xaxes(
+        visible=False,
+        range=[-3.4, 3.4],
+        fixedrange=True,
+    )
+    fig.update_yaxes(
+        visible=False,
+        range=[0.0, max(6.6, max_ry + 0.5)],
+        scaleanchor="x",
+        scaleratio=1,
+        fixedrange=True,
+    )
+    return fig
+
+
+
+def render_arm_slot(data: pd.DataFrame, ui=st) -> None:
+    ui.subheader("Release point & arm slot")
+    fig = build_arm_slot_chart(data)
+    if not fig.data:
+        ui.info("Release point measurements are not available for these filters.")
+        return
+    ui.plotly_chart(fig, use_container_width=True)
+
+
+
 def report_chart_layout(fig: go.Figure, height: int = 300) -> go.Figure:
     fig.update_layout(
         height=height,

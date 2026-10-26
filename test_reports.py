@@ -75,6 +75,7 @@ class ReportTests(unittest.TestCase):
             "HorzBreak": [3], "InducedVertBreak": [12], "RelSpeed": [90],
             "Tilt": ["12:30"], "VertApprAngle": [-5], "HorzApprAngle": [1],
             "PlateLocSide": [0], "PlateLocHeight": [2],
+            "RelSide": [1.9], "RelHeight": [5.8],
         }))
         html = build_report_html(data, "<test.csv>")
         specs = json.loads(re.search(
@@ -89,6 +90,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(barpolar_plots), 2)
         self.assertIn("Tilt direction by pitch type", html)
         self.assertIn("Observed movement direction by pitch type", html)
+        self.assertIn("Release point &amp; arm slot", html)
         self.assertIn("&lt;test.csv&gt;", html)
         self.assertNotIn("</script><script>alert(1)</script>", html)
 

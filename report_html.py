@@ -94,6 +94,8 @@ class ReportHTML:
         if any(trace.type in {"scatterpolar", "barpolar"} for trace in figure.data):
             minimum = dict(l=45, r=45, t=40, b=40)
             figure.update_polars(radialaxis_title_text="")
+        elif figure.layout.xaxis.visible is False and figure.layout.yaxis.visible is False:
+            minimum = dict(l=15, r=15, t=20, b=40)
         figure.update_layout(margin={
             key: max(margin.get(key, 0), value) for key, value in minimum.items()
         })

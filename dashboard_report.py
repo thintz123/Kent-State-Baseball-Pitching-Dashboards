@@ -10,7 +10,8 @@ from dashboard_config import PITCH_COLORS
 from dashboard_stats import pitch_summary, report_table
 from dashboard_charts import (
     render_plate_location, render_pitch_movement, render_tilt_clock,
-    render_movement_clock, render_approach_angle_heatmaps, report_chart_layout,
+    render_movement_clock, render_approach_angle_heatmaps, render_arm_slot,
+    report_chart_layout,
 )
 
 
@@ -68,7 +69,7 @@ def compose_report(data: pd.DataFrame, ui=st) -> None:
 
     render_approach_angle_heatmaps(data, ui=ui)
 
-    usage, release = ui.columns(2)
+    usage, release, arm_slot = ui.columns(3)
     with usage:
         ui.subheader("Pitch usage %")
         fig = px.pie(
@@ -142,6 +143,8 @@ def compose_report(data: pd.DataFrame, ui=st) -> None:
             legend=dict(orientation="h", y=-0.2),
         )
         ui.plotly_chart(report_chart_layout(fig, 300), use_container_width=True)
+    with arm_slot:
+        render_arm_slot(data, ui=ui)
 
     ui.caption(
         "Actionable review: compare each pitch's shape and location with its results. "
